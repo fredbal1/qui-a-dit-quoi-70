@@ -1,9 +1,11 @@
+
 import React, { useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useGameData } from '@/hooks/useGameData';
 import { useRealtimeUpdates } from '@/hooks/useRealtimeUpdates';
 import { useGameActions } from '@/hooks/useGameActions';
+import { useRoundManagement } from '@/hooks/useRoundManagement';
 import { useErrorMonitoring } from '@/hooks/useErrorMonitoring';
 import AnimatedBackground from '@/components/AnimatedBackground';
 import KiKaDiGame from '@/components/games/KiKaDiGame';
@@ -23,6 +25,7 @@ const Game = () => {
   const { user } = useAuth();
   const { gameData, loading, error, refetch } = useGameData(gameId || '');
   const { advancePhase } = useGameActions();
+  const { createNewRound } = useRoundManagement();
   const { toast } = useToast();
   const { logError, logGameAction } = useErrorMonitoring();
 
@@ -75,21 +78,25 @@ const Game = () => {
 
     try {
       logGameAction('advance_phase_attempt', gameData.id);
-      const result = await advancePhase(gameData.id);
       
-      if (result.success) {
-        logGameAction('advance_phase_success', gameData.id, true);
-        // Game completed, redirect to results or lobby
-        if (result.nextPhase === 'ended') {
-          navigate('/dashboard');
+      // Check if we need to start a new round or end the game
+      if (gameData.current_round < gameData.total_rounds) {
+        // Create new round
+        const nextGame = getNextMiniGame(gameData.current_round + 1);
+        const roundResult = await createNewRound(gameData.id, gameData.current_round + 1, nextGame);
+        
+        if (roundResult.success) {
+          const result = await advancePhase(gameData.id);
+          if (result.success) {
+            logGameAction('new_round_started', gameData.id, true);
+          }
         }
       } else {
-        logError({
-          type: 'game_action',
-          message: 'Failed to advance game phase',
-          context: { gameId: gameData.id, error: result.error },
-          timestamp: new Date().toISOString()
-        });
+        // End game
+        const result = await advancePhase(gameData.id);
+        if (result.success && result.nextPhase === 'ended') {
+          navigate('/dashboard');
+        }
       }
     } catch (err: any) {
       logError({
@@ -99,6 +106,11 @@ const Game = () => {
         timestamp: new Date().toISOString()
       });
     }
+  };
+
+  const getNextMiniGame = (round: number) => {
+    const games = ['kikadi', 'kidivrai', 'kideja', 'kidenous'];
+    return games[(round - 1) % games.length];
   };
 
   const renderCurrentGame = () => {
@@ -125,13 +137,13 @@ const Game = () => {
     }
   };
 
-  // Helper function to prepare scores for GameResults
-  const prepareScores = () => {
+  // Helper function to prepare real scores for GameResults
+  const prepareRealScores = () => {
     if (!gameData?.game_players) {
       return { player1: 0, player2: 0, player3: 0 };
     }
 
-    // Sort players by score and map to the expected format
+    // Sort players by actual Supabase score and map to the expected format
     const sortedPlayers = [...gameData.game_players]
       .sort((a, b) => (b.score || 0) - (a.score || 0));
 
@@ -165,7 +177,7 @@ const Game = () => {
 
   // Show results if game ended
   if (gameData.phase === 'ended') {
-    return <GameResults scores={prepareScores()} onRestart={() => navigate('/dashboard')} />;
+    return <GameResults scores={prepareRealScores()} onRestart={() => navigate('/dashboard')} />;
   }
 
   return (
