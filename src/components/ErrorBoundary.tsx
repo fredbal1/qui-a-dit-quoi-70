@@ -57,7 +57,7 @@ class ErrorBoundary extends Component<Props, State> {
       }
 
       return (
-        <AnimatedBackground variant="error">
+        <AnimatedBackground variant="game">
           <div className="min-h-screen flex items-center justify-center p-4">
             <GlassCard className="text-center max-w-md">
               <div className="text-6xl mb-4 animate-bounce">😵</div>

@@ -1,4 +1,3 @@
-
 import React, { useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
@@ -46,7 +45,7 @@ const Game = () => {
       logError({
         type: 'game_action',
         message: 'Failed to load game data',
-        context: { gameId, error: error.message },
+        context: { gameId, error: error },
         timestamp: new Date().toISOString()
       });
       toast({
