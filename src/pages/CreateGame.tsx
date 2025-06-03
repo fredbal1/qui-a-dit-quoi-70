@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useGameActions } from '@/hooks/useGameActions';
+import { useGameCreation } from '@/hooks/useGameCreation';
 import { useGameValidation } from '@/hooks/useGameValidation';
 import AnimatedBackground from '@/components/AnimatedBackground';
 import GlassCard from '@/components/GlassCard';
@@ -22,7 +22,7 @@ import {
 
 const CreateGame = () => {
   const navigate = useNavigate();
-  const { createGame, loading } = useGameActions();
+  const { createGame, loading } = useGameCreation();
   const { validateGameSettings } = useGameValidation();
   const [twoPlayersOnly, setTwoPlayersOnly] = useState(false);
   const [selectedMode, setSelectedMode] = useState<string>('');

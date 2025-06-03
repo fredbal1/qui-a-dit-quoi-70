@@ -4,7 +4,7 @@ import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useGameData } from '@/hooks/useGameData';
 import { useRealtimeUpdates } from '@/hooks/useRealtimeUpdates';
-import { useGameActions } from '@/hooks/useGameActions';
+import { useGamePhase } from '@/hooks/useGamePhase';
 import { useRoundManagement } from '@/hooks/useRoundManagement';
 import { useErrorMonitoring } from '@/hooks/useErrorMonitoring';
 import AnimatedBackground from '@/components/AnimatedBackground';
@@ -24,7 +24,7 @@ const Game = () => {
   const { gameId } = useParams();
   const { user } = useAuth();
   const { gameData, loading, error, refetch } = useGameData(gameId || '');
-  const { advancePhase } = useGameActions();
+  const { advancePhase } = useGamePhase();
   const { createNewRound } = useRoundManagement();
   const { toast } = useToast();
   const { logError, logGameAction } = useErrorMonitoring();

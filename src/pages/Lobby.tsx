@@ -1,10 +1,9 @@
-
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useGameData } from '@/hooks/useGameData';
 import { useRealtimeUpdates } from '@/hooks/useRealtimeUpdates';
-import { useGameActions } from '@/hooks/useGameActions';
+import { useGamePhase } from '@/hooks/useGamePhase';
 import AnimatedBackground from '@/components/AnimatedBackground';
 import GlassCard from '@/components/GlassCard';
 import { Button } from '@/components/ui/button';
@@ -17,7 +16,7 @@ const Lobby = () => {
   const { gameId } = useParams();
   const { user } = useAuth();
   const { gameData, loading, error, refetch } = useGameData(gameId || '');
-  const { advancePhase, loading: actionLoading } = useGameActions();
+  const { advancePhase, loading: actionLoading } = useGamePhase();
   const { toast } = useToast();
 
   const floatingEmojis = ['🎉', '🎮', '🎲', '🎪', '⭐', '🚀', '💫', '🎭'];
