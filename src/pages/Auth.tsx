@@ -1,23 +1,93 @@
-
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
 import AnimatedBackground from '@/components/AnimatedBackground';
 import GlassCard from '@/components/GlassCard';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { User, Mail, Lock, UserPlus } from 'lucide-react';
+import { User, Mail, Lock, UserPlus, Loader2 } from 'lucide-react';
+import { useToast } from '@/hooks/use-toast';
 
 const Auth = () => {
   const navigate = useNavigate();
+  const { user, loading: authLoading, signIn, signUp, signOut } = useAuth();
+  const { toast } = useToast();
+  
   const [pseudo, setPseudo] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [loading, setLoading] = useState(false);
+
+  // Redirect if already authenticated
+  useEffect(() => {
+    if (!authLoading && user) {
+      navigate('/dashboard');
+    }
+  }, [user, authLoading, navigate]);
+
+  const handleSignIn = async () => {
+    if (!email || !password) return;
+    
+    setLoading(true);
+    try {
+      const { error } = await signIn(email, password);
+      if (error) {
+        toast({
+          title: "Erreur de connexion",
+          description: error.message,
+          variant: "destructive"
+        });
+      } else {
+        toast({
+          title: "Connexion réussie ! 🎉",
+          description: "Bienvenue dans KIADISA"
+        });
+      }
+    } catch (err: any) {
+      toast({
+        title: "Erreur",
+        description: "Une erreur inattendue s'est produite",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSignUp = async () => {
+    if (!pseudo || !email || !password) return;
+    
+    setLoading(true);
+    try {
+      const { error } = await signUp(email, password, pseudo);
+      if (error) {
+        toast({
+          title: "Erreur d'inscription",
+          description: error.message,
+          variant: "destructive"
+        });
+      } else {
+        toast({
+          title: "Inscription réussie ! 🎉",
+          description: "Vérifiez votre email pour confirmer votre compte"
+        });
+      }
+    } catch (err: any) {
+      toast({
+        title: "Erreur",
+        description: "Une erreur inattendue s'est produite",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleGuest = () => {
+    // Keep guest functionality as fallback
     if (pseudo.trim()) {
-      // Store guest data in localStorage
       localStorage.setItem('kiadisa_user', JSON.stringify({
         pseudo: pseudo.trim(),
         isGuest: true,
@@ -27,36 +97,23 @@ const Auth = () => {
     }
   };
 
-  const handleSignIn = () => {
-    if (email && password) {
-      // Mock auth for now
-      localStorage.setItem('kiadisa_user', JSON.stringify({
-        pseudo: email.split('@')[0],
-        email,
-        isGuest: false,
-        avatar: '👤'
-      }));
-      navigate('/dashboard');
-    }
-  };
-
-  const handleSignUp = () => {
-    if (pseudo && email && password) {
-      // Mock auth for now
-      localStorage.setItem('kiadisa_user', JSON.stringify({
-        pseudo: pseudo.trim(),
-        email,
-        isGuest: false,
-        avatar: '🌟'
-      }));
-      navigate('/dashboard');
-    }
-  };
-
   const getRandomAvatar = () => {
     const avatars = ['🎮', '🎯', '🎲', '🎪', '🎨', '🎭', '🎸', '🎺'];
     return avatars[Math.floor(Math.random() * avatars.length)];
   };
+
+  if (authLoading) {
+    return (
+      <AnimatedBackground variant="auth">
+        <div className="flex flex-col items-center justify-center min-h-screen p-4">
+          <GlassCard className="text-center">
+            <Loader2 className="w-8 h-8 animate-spin text-white mx-auto mb-4" />
+            <p className="text-white">Chargement...</p>
+          </GlassCard>
+        </div>
+      </AnimatedBackground>
+    );
+  }
 
   return (
     <AnimatedBackground variant="auth">
@@ -74,7 +131,7 @@ const Auth = () => {
 
           {/* Auth Form */}
           <GlassCard className="animate-slide-up">
-            <Tabs defaultValue="guest" className="w-full">
+            <Tabs defaultValue="signin" className="w-full">
               <TabsList className="grid w-full grid-cols-3 glass-card border-white/20">
                 <TabsTrigger value="signin" className="text-white data-[state=active]:bg-white/20 data-[state=active]:text-white">
                   Connexion
@@ -99,6 +156,7 @@ const Auth = () => {
                       className="pl-10 bg-white/95 border-white/50 text-gray-900 placeholder:text-gray-500"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
+                      disabled={loading}
                     />
                   </div>
                 </div>
@@ -113,15 +171,21 @@ const Auth = () => {
                       className="pl-10 bg-white/95 border-white/50 text-gray-900 placeholder:text-gray-500"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
+                      disabled={loading}
+                      onKeyPress={(e) => e.key === 'Enter' && handleSignIn()}
                     />
                   </div>
                 </div>
                 <Button 
                   onClick={handleSignIn}
+                  disabled={!email || !password || loading}
                   className="w-full glass-button text-white border-white/30 hover:bg-white/20"
-                  disabled={!email || !password}
                 >
-                  <User className="mr-2 w-4 h-4" />
+                  {loading ? (
+                    <Loader2 className="mr-2 w-4 h-4 animate-spin" />
+                  ) : (
+                    <User className="mr-2 w-4 h-4" />
+                  )}
                   Se connecter
                 </Button>
               </TabsContent>
@@ -137,6 +201,7 @@ const Auth = () => {
                       className="pl-10 bg-white/95 border-white/50 text-gray-900 placeholder:text-gray-500"
                       value={pseudo}
                       onChange={(e) => setPseudo(e.target.value)}
+                      disabled={loading}
                     />
                   </div>
                 </div>
@@ -151,6 +216,7 @@ const Auth = () => {
                       className="pl-10 bg-white/95 border-white/50 text-gray-900 placeholder:text-gray-500"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
+                      disabled={loading}
                     />
                   </div>
                 </div>
@@ -165,15 +231,21 @@ const Auth = () => {
                       className="pl-10 bg-white/95 border-white/50 text-gray-900 placeholder:text-gray-500"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
+                      disabled={loading}
+                      onKeyPress={(e) => e.key === 'Enter' && handleSignUp()}
                     />
                   </div>
                 </div>
                 <Button 
                   onClick={handleSignUp}
+                  disabled={!pseudo || !email || !password || loading}
                   className="w-full glass-button text-white border-white/30 hover:bg-white/20"
-                  disabled={!pseudo || !email || !password}
                 >
-                  <UserPlus className="mr-2 w-4 h-4" />
+                  {loading ? (
+                    <Loader2 className="mr-2 w-4 h-4 animate-spin" />
+                  ) : (
+                    <UserPlus className="mr-2 w-4 h-4" />
+                  )}
                   Créer mon compte
                 </Button>
               </TabsContent>
@@ -189,6 +261,7 @@ const Auth = () => {
                       className="pl-10 bg-white/95 border-white/50 text-gray-900 placeholder:text-gray-500"
                       value={pseudo}
                       onChange={(e) => setPseudo(e.target.value)}
+                      disabled={loading}
                     />
                   </div>
                 </div>
