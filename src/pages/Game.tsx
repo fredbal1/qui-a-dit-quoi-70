@@ -86,6 +86,23 @@ const Game = () => {
     }
   };
 
+  // Helper function to prepare scores for GameResults
+  const prepareScores = () => {
+    if (!gameData?.game_players) {
+      return { player1: 0, player2: 0, player3: 0 };
+    }
+
+    // Sort players by score and map to the expected format
+    const sortedPlayers = [...gameData.game_players]
+      .sort((a, b) => (b.score || 0) - (a.score || 0));
+
+    return {
+      player1: sortedPlayers[0]?.score || 0,
+      player2: sortedPlayers[1]?.score || 0,
+      player3: sortedPlayers[2]?.score || 0
+    };
+  };
+
   if (loading) {
     return (
       <AnimatedBackground variant="game">
@@ -118,7 +135,7 @@ const Game = () => {
 
   // Show results if game ended
   if (gameData.phase === 'ended') {
-    return <GameResults scores={{}} onRestart={() => navigate('/dashboard')} />;
+    return <GameResults scores={prepareScores()} onRestart={() => navigate('/dashboard')} />;
   }
 
   return (
