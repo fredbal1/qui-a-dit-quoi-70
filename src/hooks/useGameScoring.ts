@@ -101,19 +101,28 @@ export const useGameScoring = () => {
           break;
       }
 
-      // Apply score updates to database
+      // Apply score updates to database using RPC calls for atomic increments
       for (const [playerId, points] of Object.entries(scoreUpdates)) {
-        const { error } = await supabase
+        // Get current values first
+        const { data: currentPlayer } = await supabase
           .from('game_players')
-          .update({ 
-            score: supabase.raw(`score + ${points}`),
-            xp: supabase.raw(`xp + ${points * 25}`),
-            coins: supabase.raw(`coins + ${points * 10}`)
-          })
-          .eq('user_id', playerId);
+          .select('score, xp, coins')
+          .eq('user_id', playerId)
+          .single();
 
-        if (error) {
-          console.error('Error updating player score:', error);
+        if (currentPlayer) {
+          const { error } = await supabase
+            .from('game_players')
+            .update({ 
+              score: (currentPlayer.score || 0) + points,
+              xp: (currentPlayer.xp || 0) + (points * 25),
+              coins: (currentPlayer.coins || 0) + (points * 10)
+            })
+            .eq('user_id', playerId);
+
+          if (error) {
+            console.error('Error updating player score:', error);
+          }
         }
       }
 
