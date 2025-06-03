@@ -1,9 +1,10 @@
-
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useGameActions } from '@/hooks/useGameActions';
+import { useGameValidation } from '@/hooks/useGameValidation';
 import AnimatedBackground from '@/components/AnimatedBackground';
 import GlassCard from '@/components/GlassCard';
+import NetworkFallback from '@/components/NetworkFallback';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
@@ -22,11 +23,13 @@ import {
 const CreateGame = () => {
   const navigate = useNavigate();
   const { createGame, loading } = useGameActions();
+  const { validateGameSettings } = useGameValidation();
   const [twoPlayersOnly, setTwoPlayersOnly] = useState(false);
   const [selectedMode, setSelectedMode] = useState<string>('');
   const [selectedAmbiance, setSelectedAmbiance] = useState<string>('');
   const [selectedMiniGames, setSelectedMiniGames] = useState<string[]>([]);
   const [rounds, setRounds] = useState([5]);
+  const [networkError, setNetworkError] = useState(false);
 
   const modes = [
     {
@@ -122,7 +125,7 @@ const CreateGame = () => {
   };
 
   const getEstimatedTime = () => {
-    const baseTime = 3; // 3 minutes par manche
+    const baseTime = 3;
     return rounds[0] * baseTime;
   };
 
@@ -130,6 +133,8 @@ const CreateGame = () => {
 
   const handleCreateGame = async () => {
     if (!canCreateGame || loading) return;
+
+    setNetworkError(false);
 
     const gameSettings = {
       mode: selectedMode,
@@ -140,12 +145,38 @@ const CreateGame = () => {
       estimatedTime: getEstimatedTime()
     };
 
+    // Validation côté client avant envoi
+    if (!validateGameSettings(gameSettings)) {
+      return;
+    }
+
     const result = await createGame(gameSettings);
     
     if (result.success && result.gameCode) {
       navigate(`/lobby/${result.gameCode}`);
+    } else if (result.error?.includes('NetworkError') || result.error?.includes('fetch')) {
+      setNetworkError(true);
     }
   };
+
+  const handleRetryConnection = () => {
+    setNetworkError(false);
+    handleCreateGame();
+  };
+
+  if (networkError) {
+    return (
+      <AnimatedBackground variant="create">
+        <div className="min-h-screen flex items-center justify-center p-4">
+          <NetworkFallback 
+            onRetry={handleRetryConnection}
+            message="Impossible de créer la partie"
+            retrying={loading}
+          />
+        </div>
+      </AnimatedBackground>
+    );
+  }
 
   return (
     <AnimatedBackground variant="create">

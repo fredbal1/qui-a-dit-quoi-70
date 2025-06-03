@@ -4,11 +4,19 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 
 interface AppErrorEvent {
-  type: 'game_action' | 'realtime' | 'auth' | 'network' | 'ui';
+  type: 'game_action' | 'realtime' | 'auth' | 'network' | 'ui' | 'performance';
   message: string;
   context?: Record<string, any>;
   timestamp: string;
   userId?: string;
+  severity?: 'low' | 'medium' | 'high' | 'critical';
+}
+
+interface PerformanceMetrics {
+  loadTime: number;
+  renderTime: number;
+  apiResponseTime: number;
+  errorRate: number;
 }
 
 export const useErrorMonitoring = () => {
@@ -16,60 +24,79 @@ export const useErrorMonitoring = () => {
   const { user } = useAuth();
 
   const logError = (error: AppErrorEvent) => {
-    // Enhanced error logging with user context
     const errorWithContext = {
       ...error,
       userId: user?.id || 'anonymous',
       userAgent: navigator.userAgent,
-      url: window.location.href
+      url: window.location.href,
+      viewport: `${window.innerWidth}x${window.innerHeight}`,
+      timestamp: error.timestamp || new Date().toISOString(),
+      severity: error.severity || 'medium'
     };
 
     console.error('[KIADISA Error]', errorWithContext);
 
-    // Dans un environnement de production, envoyer à Sentry ou LogSnag
-    // if (process.env.NODE_ENV === 'production') {
-    //   Sentry.captureException(new Error(error.message), {
-    //     tags: { type: error.type, userId: user?.id },
-    //     extra: error.context
-    //   });
-    // }
+    // Stockage local pour statistiques
+    const errors = JSON.parse(localStorage.getItem('kiadisa_errors') || '[]');
+    errors.push(errorWithContext);
+    
+    // Garder seulement les 50 dernières erreurs
+    if (errors.length > 50) {
+      errors.splice(0, errors.length - 50);
+    }
+    
+    localStorage.setItem('kiadisa_errors', JSON.stringify(errors));
 
-    // Smart user notifications based on error type
+    // Notifications utilisateur intelligentes
     switch (error.type) {
       case 'network':
-        toast({
-          title: "🌐 Problème de connexion",
-          description: "Vérifiez votre connexion internet et réessayez",
-          variant: "destructive"
-        });
+        if (error.severity === 'critical') {
+          toast({
+            title: "🌐 Connexion perdue",
+            description: "Reconnexion automatique en cours...",
+            variant: "destructive"
+          });
+        }
         break;
       case 'game_action':
-        toast({
-          title: "🎮 Action impossible",
-          description: error.message,
-          variant: "destructive"
-        });
+        if (error.severity !== 'low') {
+          toast({
+            title: "🎮 Action échouée",
+            description: error.message,
+            variant: "destructive"
+          });
+        }
         break;
       case 'auth':
         toast({
-          title: "🔐 Problème d'authentification",
+          title: "🔐 Session expirée",
           description: "Veuillez vous reconnecter",
           variant: "destructive"
         });
         break;
-      case 'realtime':
-        toast({
-          title: "📡 Connexion temps réel interrompue",
-          description: "Reconnexion en cours...",
-          variant: "destructive"
-        });
+      case 'performance':
+        if (error.severity === 'high') {
+          console.warn('[Performance] Dégradation détectée:', error.context);
+        }
         break;
       default:
-        toast({
-          title: "⚠️ Une erreur s'est produite",
-          description: "Notre équipe a été notifiée",
-          variant: "destructive"
-        });
+        if (error.severity === 'critical') {
+          toast({
+            title: "⚠️ Erreur critique",
+            description: "Notre équipe a été notifiée",
+            variant: "destructive"
+          });
+        }
+    }
+
+    // En production, envoyer à un service de monitoring
+    if (process.env.NODE_ENV === 'production') {
+      // Intégration Sentry future
+      // Sentry.captureException(new Error(error.message), {
+      //   tags: { type: error.type, severity: error.severity },
+      //   extra: error.context,
+      //   user: { id: user?.id }
+      // });
     }
   };
 
@@ -79,20 +106,21 @@ export const useErrorMonitoring = () => {
       data,
       timestamp: new Date().toISOString(),
       userId: user?.id || 'anonymous',
-      sessionId: sessionStorage.getItem('session_id') || 'unknown'
+      sessionId: sessionStorage.getItem('session_id') || 'unknown',
+      page: window.location.pathname
     };
 
     console.log('[KIADISA Event]', event);
 
-    // Dans un environnement de production :
-    // LogSnag.track({
-    //   channel: 'game-events',
-    //   event: eventType,
-    //   description: `User performed ${eventType}`,
-    //   icon: '🎮',
-    //   notify: false,
-    //   tags: { ...data, userId: user?.id }
-    // });
+    // Stockage pour analytics
+    const events = JSON.parse(localStorage.getItem('kiadisa_events') || '[]');
+    events.push(event);
+    
+    if (events.length > 100) {
+      events.splice(0, events.length - 100);
+    }
+    
+    localStorage.setItem('kiadisa_events', JSON.stringify(events));
   };
 
   const logGameAction = (action: string, gameId?: string, success?: boolean) => {
@@ -104,11 +132,57 @@ export const useErrorMonitoring = () => {
     });
   };
 
+  const logPerformance = (metrics: Partial<PerformanceMetrics>) => {
+    const performanceEvent: AppErrorEvent = {
+      type: 'performance',
+      message: 'Performance metrics',
+      context: metrics,
+      timestamp: new Date().toISOString(),
+      severity: 'low'
+    };
+
+    // Alerter si les métriques sont dégradées
+    if (metrics.loadTime && metrics.loadTime > 3000) {
+      performanceEvent.severity = 'high';
+      performanceEvent.message = 'Temps de chargement élevé';
+    }
+
+    if (metrics.errorRate && metrics.errorRate > 0.1) {
+      performanceEvent.severity = 'high';
+      performanceEvent.message = 'Taux d\'erreur élevé';
+    }
+
+    logError(performanceEvent);
+  };
+
+  const getErrorStats = () => {
+    const errors = JSON.parse(localStorage.getItem('kiadisa_errors') || '[]');
+    const events = JSON.parse(localStorage.getItem('kiadisa_events') || '[]');
+    
+    return {
+      totalErrors: errors.length,
+      errorsByType: errors.reduce((acc: any, error: any) => {
+        acc[error.type] = (acc[error.type] || 0) + 1;
+        return acc;
+      }, {}),
+      totalEvents: events.length,
+      lastErrors: errors.slice(-10)
+    };
+  };
+
   useEffect(() => {
-    // Generate session ID for tracking
+    // Générer un ID de session pour le suivi
     if (!sessionStorage.getItem('session_id')) {
       sessionStorage.setItem('session_id', Math.random().toString(36).substring(7));
     }
+
+    // Mesurer les performances de chargement
+    const measureLoadTime = () => {
+      const loadTime = performance.timing.loadEventEnd - performance.timing.navigationStart;
+      if (loadTime > 0) {
+        logPerformance({ loadTime });
+      }
+    };
 
     // Capturer les erreurs JavaScript non gérées
     const handleError = (event: ErrorEvent) => {
@@ -121,7 +195,8 @@ export const useErrorMonitoring = () => {
           colno: event.colno,
           stack: event.error?.stack
         },
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        severity: 'high'
       });
     };
 
@@ -134,34 +209,40 @@ export const useErrorMonitoring = () => {
           reason: event.reason,
           stack: event.reason?.stack
         },
-        timestamp: new Date().toISOString()
+        timestamp: new Date().toISOString(),
+        severity: 'medium'
       });
     };
 
-    // Capturer les erreurs de chargement de ressources
-    const handleResourceError = (event: Event) => {
-      const target = event.target as HTMLElement;
-      logError({
-        type: 'network',
-        message: 'Échec de chargement de ressource',
-        context: {
-          tagName: target?.tagName,
-          src: (target as any)?.src || (target as any)?.href
-        },
-        timestamp: new Date().toISOString()
-      });
+    // Mesurer les performances de rendu
+    const measureRenderTime = () => {
+      const entries = performance.getEntriesByType('measure');
+      const lastEntry = entries[entries.length - 1];
+      if (lastEntry) {
+        logPerformance({ renderTime: lastEntry.duration });
+      }
     };
 
+    window.addEventListener('load', measureLoadTime);
     window.addEventListener('error', handleError);
     window.addEventListener('unhandledrejection', handleUnhandledRejection);
-    document.addEventListener('error', handleResourceError, true);
+
+    // Mesurer périodiquement les performances
+    const performanceInterval = setInterval(measureRenderTime, 30000);
 
     return () => {
+      window.removeEventListener('load', measureLoadTime);
       window.removeEventListener('error', handleError);
       window.removeEventListener('unhandledrejection', handleUnhandledRejection);
-      document.removeEventListener('error', handleResourceError, true);
+      clearInterval(performanceInterval);
     };
   }, [user?.id]);
 
-  return { logError, logEvent, logGameAction };
+  return { 
+    logError, 
+    logEvent, 
+    logGameAction, 
+    logPerformance, 
+    getErrorStats 
+  };
 };

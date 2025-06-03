@@ -498,6 +498,10 @@ export type Database = {
         Args: { player_user_id: string }
         Returns: boolean
       }
+      can_access_game_player_safe: {
+        Args: { player_user_id: string }
+        Returns: boolean
+      }
       is_game_host: {
         Args: { game_id: string }
         Returns: boolean
