@@ -1,39 +1,46 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
+import { useGameData } from '@/hooks/useGameData';
+import { useRealtimeUpdates } from '@/hooks/useRealtimeUpdates';
+import { useGameActions } from '@/hooks/useGameActions';
 import AnimatedBackground from '@/components/AnimatedBackground';
 import GlassCard from '@/components/GlassCard';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Crown, Users, Copy, Play, Share } from 'lucide-react';
+import { ArrowLeft, Crown, Users, Copy, Play, Share, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
 
 const Lobby = () => {
   const navigate = useNavigate();
   const { gameId } = useParams();
+  const { user } = useAuth();
+  const { gameData, loading, error, refetch } = useGameData(gameId || '');
+  const { advancePhase, loading: actionLoading } = useGameActions();
   const { toast } = useToast();
-  const [user, setUser] = useState<any>(null);
-  const [isHost, setIsHost] = useState(false);
-  const [players, setPlayers] = useState([
-    { id: '1', pseudo: 'Alex', avatar: '🎮', isHost: true },
-    { id: '2', pseudo: 'Marie', avatar: '🌟', isHost: false },
-    { id: '3', pseudo: 'Julien', avatar: '🎯', isHost: false }
-  ]);
 
   const floatingEmojis = ['🎉', '🎮', '🎲', '🎪', '⭐', '🚀', '💫', '🎭'];
   const [currentEmoji, setCurrentEmoji] = useState(0);
 
+  // Set up realtime updates
+  useRealtimeUpdates(gameData?.id || '', refetch);
+
   useEffect(() => {
-    const userData = localStorage.getItem('kiadisa_user');
-    if (!userData) {
+    if (!user) {
       navigate('/auth');
       return;
     }
-    const parsedUser = JSON.parse(userData);
-    setUser(parsedUser);
-    
-    // Simulate if user is host (first player)
-    setIsHost(players[0].pseudo === parsedUser.pseudo);
+
+    if (error) {
+      toast({
+        title: "Erreur",
+        description: "Impossible de charger la partie",
+        variant: "destructive"
+      });
+      navigate('/dashboard');
+      return;
+    }
 
     // Rotate floating emojis
     const interval = setInterval(() => {
@@ -41,18 +48,20 @@ const Lobby = () => {
     }, 2000);
 
     return () => clearInterval(interval);
-  }, [navigate]);
+  }, [navigate, user, error, toast]);
 
   const copyGameCode = () => {
-    navigator.clipboard.writeText(gameId || '');
-    toast({
-      title: "Code copié ! 📋",
-      description: "Partage-le avec tes amis pour qu'ils rejoignent",
-    });
+    if (gameId) {
+      navigator.clipboard.writeText(gameId);
+      toast({
+        title: "Code copié ! 📋",
+        description: "Partage-le avec tes amis pour qu'ils rejoignent",
+      });
+    }
   };
 
   const shareGame = () => {
-    if (navigator.share) {
+    if (navigator.share && gameId) {
       navigator.share({
         title: 'KIADISA - Rejoins ma partie !',
         text: `Salut ! Rejoins ma partie KIADISA avec le code : ${gameId}`,
@@ -63,8 +72,11 @@ const Lobby = () => {
     }
   };
 
-  const startGame = () => {
-    if (isHost) {
+  const startGame = async () => {
+    if (!gameData?.id || !isHost || actionLoading) return;
+
+    const result = await advancePhase(gameData.id);
+    if (result.success) {
       navigate(`/game/${gameId}`);
     }
   };
@@ -86,7 +98,39 @@ const Lobby = () => {
     return () => clearInterval(messageInterval);
   }, []);
 
-  if (!user) return null;
+  if (loading) {
+    return (
+      <AnimatedBackground variant="lobby">
+        <div className="min-h-screen flex items-center justify-center p-4">
+          <GlassCard className="text-center">
+            <Loader2 className="w-8 h-8 animate-spin text-white mx-auto mb-4" />
+            <p className="text-white">Chargement de la partie...</p>
+          </GlassCard>
+        </div>
+      </AnimatedBackground>
+    );
+  }
+
+  if (!gameData) {
+    return (
+      <AnimatedBackground variant="lobby">
+        <div className="min-h-screen flex items-center justify-center p-4">
+          <GlassCard className="text-center">
+            <h2 className="text-xl font-poppins font-bold text-white mb-4">
+              Partie introuvable
+            </h2>
+            <Button onClick={() => navigate('/dashboard')} className="glass-button">
+              Retour au dashboard
+            </Button>
+          </GlassCard>
+        </div>
+      </AnimatedBackground>
+    );
+  }
+
+  const isHost = gameData.host === user?.id;
+  const players = gameData.game_players || [];
+  const canStart = players.length >= 2; // Minimum 2 players to start
 
   return (
     <AnimatedBackground variant="lobby">
@@ -107,7 +151,7 @@ const Lobby = () => {
             </h1>
           </div>
           <Badge className="glass-card text-white border-white/30 font-mono tracking-wider">
-            {gameId}
+            {gameData.code}
           </Badge>
         </div>
 
@@ -117,7 +161,7 @@ const Lobby = () => {
             Code de la partie
           </h2>
           <div className="text-3xl font-mono font-bold text-white mb-4 tracking-widest">
-            {gameId}
+            {gameData.code}
           </div>
           <div className="flex space-x-3 justify-center">
             <Button
@@ -160,17 +204,17 @@ const Lobby = () => {
                   <div className="flex items-center space-x-4">
                     <div className="text-3xl animate-float"
                          style={{ animationDelay: `${index * 0.5}s` }}>
-                      {player.avatar}
+                      {player.profiles?.avatar || '🎮'}
                     </div>
                     <div>
                       <h3 className="font-poppins font-semibold text-white flex items-center">
-                        {player.pseudo}
-                        {player.isHost && (
+                        {player.profiles?.pseudo || 'Joueur'}
+                        {player.is_host && (
                           <Crown className="ml-2 w-4 h-4 text-yellow-300" />
                         )}
                       </h3>
                       <p className="text-white/80 text-sm font-inter">
-                        {player.isHost ? 'Créateur de la partie' : 'Joueur'}
+                        {player.is_host ? 'Créateur de la partie' : 'Joueur'}
                       </p>
                     </div>
                   </div>
@@ -195,10 +239,20 @@ const Lobby = () => {
         {isHost && (
           <Button
             onClick={startGame}
+            disabled={!canStart || actionLoading}
             className="w-full glass-button text-white border-white/30 hover:bg-white/20 text-lg py-6 font-poppins font-semibold animate-pulse-glow"
           >
-            <Play className="mr-3 w-6 h-6" />
-            Commencer la partie ! 🚀
+            {actionLoading ? (
+              <>
+                <Loader2 className="mr-3 w-6 h-6 animate-spin" />
+                Démarrage...
+              </>
+            ) : (
+              <>
+                <Play className="mr-3 w-6 h-6" />
+                {canStart ? 'Commencer la partie ! 🚀' : `Attendez ${2 - players.length} joueur(s) de plus`}
+              </>
+            )}
           </Button>
         )}
 
@@ -207,6 +261,15 @@ const Lobby = () => {
           <GlassCard className="text-center bg-blue-500/20 border-blue-300/30">
             <p className="text-blue-100 font-inter">
               👑 Seul le créateur de la partie peut la lancer
+            </p>
+          </GlassCard>
+        )}
+
+        {/* Minimum players warning */}
+        {isHost && !canStart && (
+          <GlassCard className="mt-4 text-center bg-orange-500/20 border-orange-300/30">
+            <p className="text-orange-100 font-inter">
+              ⚠️ Il faut au minimum 2 joueurs pour commencer
             </p>
           </GlassCard>
         )}

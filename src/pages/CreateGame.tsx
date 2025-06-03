@@ -1,6 +1,7 @@
 
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useGameActions } from '@/hooks/useGameActions';
 import AnimatedBackground from '@/components/AnimatedBackground';
 import GlassCard from '@/components/GlassCard';
 import { Button } from '@/components/ui/button';
@@ -13,14 +14,14 @@ import {
   Brain, 
   Zap, 
   Heart, 
-  Shield, 
-  Eye, 
   Clock,
-  Play
+  Play,
+  Loader2
 } from 'lucide-react';
 
 const CreateGame = () => {
   const navigate = useNavigate();
+  const { createGame, loading } = useGameActions();
   const [twoPlayersOnly, setTwoPlayersOnly] = useState(false);
   const [selectedMode, setSelectedMode] = useState<string>('');
   const [selectedAmbiance, setSelectedAmbiance] = useState<string>('');
@@ -127,11 +128,22 @@ const CreateGame = () => {
 
   const canCreateGame = selectedMode && selectedAmbiance && selectedMiniGames.length > 0;
 
-  const handleCreateGame = () => {
-    if (canCreateGame) {
-      // Create game logic here
-      const gameId = Math.random().toString(36).substring(2, 8).toUpperCase();
-      navigate(`/lobby/${gameId}`);
+  const handleCreateGame = async () => {
+    if (!canCreateGame || loading) return;
+
+    const gameSettings = {
+      mode: selectedMode,
+      ambiance: selectedAmbiance,
+      miniGames: selectedMiniGames,
+      totalRounds: rounds[0],
+      twoPlayersOnly,
+      estimatedTime: getEstimatedTime()
+    };
+
+    const result = await createGame(gameSettings);
+    
+    if (result.success && result.gameCode) {
+      navigate(`/lobby/${result.gameCode}`);
     }
   };
 
@@ -305,11 +317,20 @@ const CreateGame = () => {
         {/* Create Button */}
         <Button
           onClick={handleCreateGame}
-          disabled={!canCreateGame}
+          disabled={!canCreateGame || loading}
           className="w-full glass-button text-white border-white/30 hover:bg-white/20 text-lg py-6 font-poppins font-semibold"
         >
-          <Play className="mr-3 w-6 h-6" />
-          Lancer la partie 🚀
+          {loading ? (
+            <>
+              <Loader2 className="mr-3 w-6 h-6 animate-spin" />
+              Création en cours...
+            </>
+          ) : (
+            <>
+              <Play className="mr-3 w-6 h-6" />
+              Lancer la partie 🚀
+            </>
+          )}
         </Button>
       </div>
     </AnimatedBackground>

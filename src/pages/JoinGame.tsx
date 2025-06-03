@@ -1,17 +1,18 @@
 
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useJoinGame } from '@/hooks/useJoinGame';
 import AnimatedBackground from '@/components/AnimatedBackground';
 import GlassCard from '@/components/GlassCard';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { ArrowLeft, Users, Check, X } from 'lucide-react';
+import { ArrowLeft, Users, Check, X, Loader2 } from 'lucide-react';
 
 const JoinGame = () => {
   const navigate = useNavigate();
+  const { joinGame, loading } = useJoinGame();
   const [gameCode, setGameCode] = useState('');
-  const [isValidating, setIsValidating] = useState(false);
   const [validationResult, setValidationResult] = useState<'valid' | 'invalid' | null>(null);
 
   const handleCodeChange = (value: string) => {
@@ -20,29 +21,24 @@ const JoinGame = () => {
     setValidationResult(null);
   };
 
-  const validateCode = async () => {
-    if (gameCode.length !== 6) return;
+  const handleJoinGame = async () => {
+    if (gameCode.length !== 6 || loading) return;
     
-    setIsValidating(true);
+    const result = await joinGame(gameCode);
     
-    // Simulate validation delay
-    setTimeout(() => {
-      // Mock validation - codes starting with 'A' are valid
-      const isValid = gameCode.startsWith('A') || gameCode === 'DEMO01';
-      setValidationResult(isValid ? 'valid' : 'invalid');
-      setIsValidating(false);
-      
-      if (isValid) {
-        setTimeout(() => {
-          navigate(`/lobby/${gameCode}`);
-        }, 1000);
-      }
-    }, 1500);
+    if (result.success && result.gameCode) {
+      setValidationResult('valid');
+      setTimeout(() => {
+        navigate(`/lobby/${result.gameCode}`);
+      }, 1000);
+    } else {
+      setValidationResult('invalid');
+    }
   };
 
   const getValidationIcon = () => {
-    if (isValidating) {
-      return <div className="animate-spin w-5 h-5 border-2 border-white border-t-transparent rounded-full" />;
+    if (loading) {
+      return <Loader2 className="w-5 h-5 animate-spin text-white" />;
     }
     if (validationResult === 'valid') {
       return <Check className="w-5 h-5 text-green-400" />;
@@ -58,7 +54,7 @@ const JoinGame = () => {
       return <span className="text-green-400">✅ Code valide ! Connexion...</span>;
     }
     if (validationResult === 'invalid') {
-      return <span className="text-red-400">❌ Code invalide</span>;
+      return <span className="text-red-400">❌ Code invalide ou partie inexistante</span>;
     }
     return null;
   };
@@ -104,6 +100,11 @@ const JoinGame = () => {
                     placeholder="ABCD12"
                     className="bg-white/95 border-white/50 text-gray-900 placeholder:text-gray-500 text-center text-xl font-mono tracking-widest"
                     maxLength={6}
+                    onKeyPress={(e) => {
+                      if (e.key === 'Enter') {
+                        handleJoinGame();
+                      }
+                    }}
                   />
                   <div className="absolute right-3 top-1/2 transform -translate-y-1/2">
                     {getValidationIcon()}
@@ -118,29 +119,18 @@ const JoinGame = () => {
               )}
 
               <Button
-                onClick={validateCode}
-                disabled={gameCode.length !== 6 || isValidating}
+                onClick={handleJoinGame}
+                disabled={gameCode.length !== 6 || loading}
                 className="w-full glass-button text-white border-white/30 hover:bg-white/20 font-poppins font-semibold"
               >
-                {isValidating ? 'Vérification...' : 'Rejoindre 🎮'}
-              </Button>
-            </div>
-          </GlassCard>
-
-          {/* Demo Code */}
-          <GlassCard className="bg-blue-600/30 border-blue-300/50 animate-slide-up">
-            <div className="text-center">
-              <h3 className="font-poppins font-semibold text-white mb-2">
-                💡 Code de démonstration
-              </h3>
-              <p className="text-white/90 text-sm font-inter mb-3">
-                Pour tester l'application, utilise le code :
-              </p>
-              <Button
-                onClick={() => handleCodeChange('DEMO01')}
-                className="bg-white/20 border-white/50 text-white hover:bg-white/30 font-mono tracking-wider text-lg px-6 py-2"
-              >
-                DEMO01
+                {loading ? (
+                  <>
+                    <Loader2 className="mr-2 w-4 h-4 animate-spin" />
+                    Vérification...
+                  </>
+                ) : (
+                  'Rejoindre 🎮'
+                )}
               </Button>
             </div>
           </GlassCard>
@@ -153,6 +143,10 @@ const JoinGame = () => {
             <Button
               variant="ghost"
               className="text-white/80 hover:text-white hover:bg-white/10 font-inter"
+              onClick={() => {
+                // Future feature: invitation system
+                console.log('Invitation feature coming soon');
+              }}
             >
               📧 Recevoir une invitation
             </Button>
