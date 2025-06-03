@@ -8,12 +8,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { User, Mail, Lock, UserPlus, Loader2 } from 'lucide-react';
-import { useToast } from '@/hooks/use-toast';
 
 const Auth = () => {
   const navigate = useNavigate();
   const { user, loading: authLoading, signIn, signUp, signOut } = useAuth();
-  const { toast } = useToast();
   
   const [pseudo, setPseudo] = useState('');
   const [email, setEmail] = useState('');
@@ -32,25 +30,12 @@ const Auth = () => {
     
     setLoading(true);
     try {
-      const { error } = await signIn(email, password);
-      if (error) {
-        toast({
-          title: "Erreur de connexion",
-          description: error.message,
-          variant: "destructive"
-        });
-      } else {
-        toast({
-          title: "Connexion réussie ! 🎉",
-          description: "Bienvenue dans KIADISA"
-        });
+      const result = await signIn(email, password);
+      if (!result.success) {
+        console.error('Sign in error:', result.error);
       }
     } catch (err: any) {
-      toast({
-        title: "Erreur",
-        description: "Une erreur inattendue s'est produite",
-        variant: "destructive"
-      });
+      console.error('Unexpected sign in error:', err);
     } finally {
       setLoading(false);
     }
@@ -61,25 +46,12 @@ const Auth = () => {
     
     setLoading(true);
     try {
-      const { error } = await signUp(email, password, pseudo);
-      if (error) {
-        toast({
-          title: "Erreur d'inscription",
-          description: error.message,
-          variant: "destructive"
-        });
-      } else {
-        toast({
-          title: "Inscription réussie ! 🎉",
-          description: "Vérifiez votre email pour confirmer votre compte"
-        });
+      const result = await signUp(email, password, pseudo, '🎮');
+      if (!result.success) {
+        console.error('Sign up error:', result.error);
       }
     } catch (err: any) {
-      toast({
-        title: "Erreur",
-        description: "Une erreur inattendue s'est produite",
-        variant: "destructive"
-      });
+      console.error('Unexpected sign up error:', err);
     } finally {
       setLoading(false);
     }
