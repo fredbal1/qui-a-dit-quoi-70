@@ -46,7 +46,11 @@ const Auth = () => {
     
     setLoading(true);
     try {
-      const result = await signUp(email, password, pseudo, '🎮');
+      // Fix: Pass metadata object as third parameter
+      const result = await signUp(email, password, {
+        pseudo,
+        avatar: '🎮'
+      });
       if (!result.success) {
         console.error('Sign up error:', result.error);
       }
