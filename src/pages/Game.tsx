@@ -1,75 +1,124 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useEffect } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useAuth } from '@/hooks/useAuth';
+import { useGameData } from '@/hooks/useGameData';
+import { useRealtimeUpdates } from '@/hooks/useRealtimeUpdates';
+import { useGameActions } from '@/hooks/useGameActions';
 import AnimatedBackground from '@/components/AnimatedBackground';
 import KiKaDiGame from '@/components/games/KiKaDiGame';
 import KiDiVraiGame from '@/components/games/KiDiVraiGame';
 import KiDejaGame from '@/components/games/KiDejaGame';
 import KiDeNousGame from '@/components/games/KiDeNousGame';
 import GameResults from '@/components/games/GameResults';
-import { ArrowLeft } from 'lucide-react';
+import GlassCard from '@/components/GlassCard';
+import { ArrowLeft, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useToast } from '@/hooks/use-toast';
 
 const Game = () => {
   const navigate = useNavigate();
   const { gameId } = useParams();
-  const [currentRound, setCurrentRound] = useState(1);
-  const [totalRounds] = useState(5);
-  const [currentGame, setCurrentGame] = useState<string>('kikadi');
-  const [gamePhase, setGamePhase] = useState<'playing' | 'results'>('playing');
-  const [scores, setScores] = useState({
-    player1: 0,
-    player2: 0,
-    player3: 0
-  });
+  const { user } = useAuth();
+  const { gameData, loading, error, refetch } = useGameData(gameId || '');
+  const { advancePhase } = useGameActions();
+  const { toast } = useToast();
 
-  const games = ['kikadi', 'kidivrai', 'kideja', 'kidenous'];
+  // Set up realtime updates
+  useRealtimeUpdates(gameData?.id || '', refetch);
 
   useEffect(() => {
-    // Rotate games for each round
-    const gameIndex = (currentRound - 1) % games.length;
-    setCurrentGame(games[gameIndex]);
-  }, [currentRound]);
+    if (!user) {
+      navigate('/auth');
+      return;
+    }
 
-  const handleGameComplete = (roundScores: any) => {
-    // Update total scores
-    setScores(prev => ({
-      player1: prev.player1 + (roundScores.player1 || 0),
-      player2: prev.player2 + (roundScores.player2 || 0),
-      player3: prev.player3 + (roundScores.player3 || 0)
-    }));
+    if (error) {
+      toast({
+        title: "Erreur",
+        description: "Impossible de charger la partie",
+        variant: "destructive"
+      });
+      navigate('/dashboard');
+      return;
+    }
 
-    // Check if game is over
-    if (currentRound >= totalRounds) {
-      setGamePhase('results');
-    } else {
-      setCurrentRound(prev => prev + 1);
+    // Redirect to lobby if game hasn't started
+    if (gameData && gameData.status === 'waiting') {
+      navigate(`/lobby/${gameId}`);
+      return;
+    }
+  }, [navigate, user, error, gameData, gameId, toast]);
+
+  const handleGameComplete = async () => {
+    if (!gameData?.id) return;
+
+    const result = await advancePhase(gameData.id);
+    if (result.success) {
+      // Game completed, redirect to results or lobby
+      if (result.nextPhase === 'ended') {
+        navigate('/dashboard');
+      }
     }
   };
 
   const renderCurrentGame = () => {
+    if (!gameData) return null;
+
     const commonProps = {
+      gameData,
       onComplete: handleGameComplete,
-      currentRound,
-      totalRounds
+      currentRound: gameData.current_round || 1,
+      totalRounds: gameData.total_rounds || 5
     };
 
-    switch (currentGame) {
-      case 'kikadi':
-        return <KiKaDiGame {...commonProps} />;
+    // Determine which game to render based on current_game field
+    switch (gameData.current_game) {
       case 'kidivrai':
         return <KiDiVraiGame {...commonProps} />;
       case 'kideja':
         return <KiDejaGame {...commonProps} />;
       case 'kidenous':
         return <KiDeNousGame {...commonProps} />;
+      case 'kikadi':
       default:
         return <KiKaDiGame {...commonProps} />;
     }
   };
 
-  if (gamePhase === 'results') {
-    return <GameResults scores={scores} onRestart={() => navigate('/dashboard')} />;
+  if (loading) {
+    return (
+      <AnimatedBackground variant="game">
+        <div className="min-h-screen flex items-center justify-center p-4">
+          <GlassCard className="text-center">
+            <Loader2 className="w-8 h-8 animate-spin text-white mx-auto mb-4" />
+            <p className="text-white">Chargement de la partie...</p>
+          </GlassCard>
+        </div>
+      </AnimatedBackground>
+    );
+  }
+
+  if (!gameData) {
+    return (
+      <AnimatedBackground variant="game">
+        <div className="min-h-screen flex items-center justify-center p-4">
+          <GlassCard className="text-center">
+            <h2 className="text-xl font-poppins font-bold text-white mb-4">
+              Partie introuvable
+            </h2>
+            <Button onClick={() => navigate('/dashboard')} className="glass-button">
+              Retour au dashboard
+            </Button>
+          </GlassCard>
+        </div>
+      </AnimatedBackground>
+    );
+  }
+
+  // Show results if game ended
+  if (gameData.phase === 'ended') {
+    return <GameResults scores={{}} onRestart={() => navigate('/dashboard')} />;
   }
 
   return (
@@ -78,7 +127,7 @@ const Game = () => {
         {/* Header */}
         <div className="flex items-center justify-between p-4 relative z-20">
           <Button
-            onClick={() => navigate('/dashboard')}
+            onClick={() => navigate(`/lobby/${gameId}`)}
             variant="ghost"
             size="sm"
             className="text-white hover:bg-white/10"
@@ -87,10 +136,10 @@ const Game = () => {
           </Button>
           <div className="text-center">
             <div className="text-white font-poppins font-semibold">
-              Manche {currentRound}/{totalRounds}
+              Manche {gameData.current_round}/{gameData.total_rounds}
             </div>
             <div className="text-white/80 text-sm">
-              Partie {gameId}
+              Phase: {gameData.phase}
             </div>
           </div>
           <div className="w-8" /> {/* Spacer for centering */}
