@@ -1,7 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
-import { useGameActions } from '@/hooks/useGameActions';
+import { useGameAnswers } from '@/hooks/useGameAnswers';
+import { useGameVotes } from '@/hooks/useGameVotes';
+import { useGamePhase } from '@/hooks/useGamePhase';
 import { useRoundManagement } from '@/hooks/useRoundManagement';
 import GlassCard from '@/components/GlassCard';
 import GamePhaseManager from './GamePhaseManager';
@@ -21,7 +23,9 @@ interface KiKaDiGameProps {
 
 const KiKaDiGame: React.FC<KiKaDiGameProps> = ({ gameData, onComplete, currentRound, totalRounds }) => {
   const { user } = useAuth();
-  const { submitAnswer, submitVote, advancePhase, loading } = useGameActions();
+  const { submitAnswer, loading: answerLoading } = useGameAnswers();
+  const { submitVote, loading: voteLoading } = useGameVotes();
+  const { advancePhase, loading: phaseLoading } = useGamePhase();
   const { completeRound } = useRoundManagement();
   const { toast } = useToast();
   const [answer, setAnswer] = useState('');
@@ -36,6 +40,7 @@ const KiKaDiGame: React.FC<KiKaDiGameProps> = ({ gameData, onComplete, currentRo
   const answers = gameData.answers || [];
   const votes = gameData.votes || [];
   const currentRoundData = gameData.current_round_data;
+  const loading = answerLoading || voteLoading || phaseLoading;
 
   // Get question from Supabase
   const [question, setQuestion] = useState<string>('');
