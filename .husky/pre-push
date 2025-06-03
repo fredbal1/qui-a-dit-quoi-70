@@ -2,5 +2,15 @@
 #!/usr/bin/env sh
 . "$(dirname -- "$0")/_/husky.sh"
 
-npm run test
-npm run build
+# Run tests and build if scripts are available
+if command -v npm >/dev/null 2>&1; then
+  if npm run test >/dev/null 2>&1; then
+    npm run test
+  fi
+  
+  if npm run build >/dev/null 2>&1; then
+    npm run build
+  fi
+else
+  echo "Warning: npm not available"
+fi

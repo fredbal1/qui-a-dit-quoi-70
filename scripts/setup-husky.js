@@ -1,24 +1,27 @@
 
-#!/usr/bin/env node
+import { execSync } from 'child_process';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+import { existsSync, mkdirSync, writeFileSync, chmodSync } from 'fs';
 
-const { execSync } = require('child_process');
-const fs = require('fs');
-const path = require('path');
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const projectRoot = join(__dirname, '..');
 
-// Créer le dossier .husky s'il n'existe pas
-const huskyDir = path.join(process.cwd(), '.husky');
-if (!fs.existsSync(huskyDir)) {
-  fs.mkdirSync(huskyDir, { recursive: true });
-}
+try {
+  // Create .husky directory if it doesn't exist
+  const huskyDir = join(projectRoot, '.husky');
+  if (!existsSync(huskyDir)) {
+    mkdirSync(huskyDir, { recursive: true });
+  }
 
-// Créer le dossier _
-const huskyUnderscoreDir = path.join(huskyDir, '_');
-if (!fs.existsSync(huskyUnderscoreDir)) {
-  fs.mkdirSync(huskyUnderscoreDir, { recursive: true });
-}
+  // Create _/husky.sh
+  const huskyUnderscoreDir = join(huskyDir, '_');
+  if (!existsSync(huskyUnderscoreDir)) {
+    mkdirSync(huskyUnderscoreDir, { recursive: true });
+  }
 
-// Créer le fichier husky.sh
-const huskyShContent = `#!/usr/bin/env sh
+  const huskyShContent = `#!/usr/bin/env sh
 if [ -z "$husky_skip_init" ]; then
   debug () {
     if [ "$HUSKY_DEBUG" = "1" ]; then
@@ -45,7 +48,12 @@ if [ -z "$husky_skip_init" ]; then
 fi
 `;
 
-fs.writeFileSync(path.join(huskyUnderscoreDir, 'husky.sh'), huskyShContent);
-fs.chmodSync(path.join(huskyUnderscoreDir, 'husky.sh'), '755');
+  const huskyShPath = join(huskyUnderscoreDir, 'husky.sh');
+  writeFileSync(huskyShPath, huskyShContent);
+  chmodSync(huskyShPath, '755');
 
-console.log('✅ Husky setup completed successfully!');
+  console.log('✅ Husky setup completed successfully!');
+} catch (error) {
+  console.error('❌ Failed to setup Husky:', error.message);
+  process.exit(1);
+}

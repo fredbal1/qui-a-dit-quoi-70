@@ -2,4 +2,9 @@
 #!/usr/bin/env sh
 . "$(dirname -- "$0")/_/husky.sh"
 
-npx lint-staged
+# Run lint-staged if available, otherwise run basic checks
+if command -v npx >/dev/null 2>&1; then
+  npx lint-staged
+else
+  echo "Warning: lint-staged not available"
+fi
