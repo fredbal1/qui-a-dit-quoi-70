@@ -5,14 +5,16 @@ import { useAuth } from '@/hooks/useAuth';
 import { useGameData } from '@/hooks/useGameData';
 import { useRealtimeUpdates } from '@/hooks/useRealtimeUpdates';
 import { useGameActions } from '@/hooks/useGameActions';
+import { useErrorMonitoring } from '@/hooks/useErrorMonitoring';
 import AnimatedBackground from '@/components/AnimatedBackground';
 import KiKaDiGame from '@/components/games/KiKaDiGame';
 import KiDiVraiGame from '@/components/games/KiDiVraiGame';
 import KiDejaGame from '@/components/games/KiDejaGame';
 import KiDeNousGame from '@/components/games/KiDeNousGame';
 import GameResults from '@/components/games/GameResults';
+import { GameLoading } from '@/components/LoadingStates';
 import GlassCard from '@/components/GlassCard';
-import { ArrowLeft, Loader2 } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
 
@@ -23,17 +25,30 @@ const Game = () => {
   const { gameData, loading, error, refetch } = useGameData(gameId || '');
   const { advancePhase } = useGameActions();
   const { toast } = useToast();
+  const { logError, logGameAction } = useErrorMonitoring();
 
   // Set up realtime updates
   useRealtimeUpdates(gameData?.id || '', refetch);
 
   useEffect(() => {
     if (!user) {
+      logError({
+        type: 'auth',
+        message: 'User not authenticated in game page',
+        context: { gameId },
+        timestamp: new Date().toISOString()
+      });
       navigate('/auth');
       return;
     }
 
     if (error) {
+      logError({
+        type: 'game_action',
+        message: 'Failed to load game data',
+        context: { gameId, error: error.message },
+        timestamp: new Date().toISOString()
+      });
       toast({
         title: "Erreur",
         description: "Impossible de charger la partie",
@@ -45,20 +60,45 @@ const Game = () => {
 
     // Redirect to lobby if game hasn't started
     if (gameData && gameData.status === 'waiting') {
+      logGameAction('redirect_to_lobby', gameId, true);
       navigate(`/lobby/${gameId}`);
       return;
     }
-  }, [navigate, user, error, gameData, gameId, toast]);
+
+    // Log successful game page load
+    if (gameData) {
+      logGameAction('game_page_loaded', gameId, true);
+    }
+  }, [navigate, user, error, gameData, gameId, toast, logError, logGameAction]);
 
   const handleGameComplete = async () => {
     if (!gameData?.id) return;
 
-    const result = await advancePhase(gameData.id);
-    if (result.success) {
-      // Game completed, redirect to results or lobby
-      if (result.nextPhase === 'ended') {
-        navigate('/dashboard');
+    try {
+      logGameAction('advance_phase_attempt', gameData.id);
+      const result = await advancePhase(gameData.id);
+      
+      if (result.success) {
+        logGameAction('advance_phase_success', gameData.id, true);
+        // Game completed, redirect to results or lobby
+        if (result.nextPhase === 'ended') {
+          navigate('/dashboard');
+        }
+      } else {
+        logError({
+          type: 'game_action',
+          message: 'Failed to advance game phase',
+          context: { gameId: gameData.id, error: result.error },
+          timestamp: new Date().toISOString()
+        });
       }
+    } catch (err: any) {
+      logError({
+        type: 'game_action',
+        message: 'Error advancing game phase',
+        context: { gameId: gameData.id, error: err.message },
+        timestamp: new Date().toISOString()
+      });
     }
   };
 
@@ -104,16 +144,7 @@ const Game = () => {
   };
 
   if (loading) {
-    return (
-      <AnimatedBackground variant="game">
-        <div className="min-h-screen flex items-center justify-center p-4">
-          <GlassCard className="text-center">
-            <Loader2 className="w-8 h-8 animate-spin text-white mx-auto mb-4" />
-            <p className="text-white">Chargement de la partie...</p>
-          </GlassCard>
-        </div>
-      </AnimatedBackground>
-    );
+    return <GameLoading message="Chargement de la partie..." variant="game" />;
   }
 
   if (!gameData) {
