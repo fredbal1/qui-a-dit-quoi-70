@@ -26,6 +26,7 @@ const Dashboard = () => {
   const { stats, loading: statsLoading } = usePlayerStats();
   const { toast } = useToast();
   const [currentTip, setCurrentTip] = useState(0);
+  const [initialized, setInitialized] = useState(false);
 
   const tips = [
     "💡 Bluffer avec subtilité te fera gagner plus de points !",
@@ -36,10 +37,14 @@ const Dashboard = () => {
   ];
 
   useEffect(() => {
-    // Redirect to auth if not authenticated
-    if (!authLoading && !user) {
-      navigate('/auth');
-      return;
+    // Only redirect after auth has been checked and we're not loading
+    if (!authLoading && !initialized) {
+      setInitialized(true);
+      
+      if (!user) {
+        navigate('/auth');
+        return;
+      }
     }
 
     // Rotate tips every 5 seconds
@@ -48,12 +53,11 @@ const Dashboard = () => {
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [navigate, user, authLoading]);
+  }, [authLoading, user, initialized, navigate]);
 
   const handleLogout = async () => {
     try {
       await signOut();
-      // Clear any guest data as well
       localStorage.removeItem('kiadisa_user');
       navigate('/');
     } catch (error) {
@@ -65,36 +69,31 @@ const Dashboard = () => {
     }
   };
 
-  // Show loading while auth or stats are loading
-  if (authLoading || statsLoading) {
+  // Show loading only while auth is loading or if not initialized
+  if (authLoading || !initialized) {
     return (
       <AnimatedBackground variant="dashboard">
         <div className="min-h-screen flex items-center justify-center p-4">
           <GlassCard className="text-center">
             <Loader2 className="w-8 h-8 animate-spin text-white mx-auto mb-4" />
-            <p className="text-white">Chargement de votre profil...</p>
+            <p className="text-white">Chargement...</p>
           </GlassCard>
         </div>
       </AnimatedBackground>
     );
   }
 
-  // Return early if no user
+  // Return early if no user after initialization
   if (!user) return null;
-
-  // Get user data from localStorage as fallback for guests
-  const guestData = localStorage.getItem('kiadisa_user');
-  const isGuest = !user && guestData;
-  const userData = isGuest ? JSON.parse(guestData) : null;
 
   // Use stats from Supabase or fallback to defaults
   const userLevel = stats?.level || 1;
   const userXP = stats?.total_xp || 0;
   const userCoins = stats?.coins || 0;
-  const userPseudo = user?.user_metadata?.pseudo || userData?.pseudo || user?.email?.split('@')[0] || 'Joueur';
-  const userAvatar = user?.user_metadata?.avatar || userData?.avatar || '🎮';
+  const userPseudo = user?.user_metadata?.pseudo || user?.email?.split('@')[0] || 'Joueur';
+  const userAvatar = user?.user_metadata?.avatar || '🎮';
   
-  const xpToNextLevel = userLevel * 200; // Simple formula
+  const xpToNextLevel = userLevel * 200;
   const xpProgress = Math.min((userXP / xpToNextLevel) * 100, 100);
 
   const actions = [
@@ -175,7 +174,7 @@ const Dashboard = () => {
                 {userLevel >= 10 && <Crown className="ml-2 w-5 h-5 text-yellow-300" />}
               </h1>
               <p className="text-white/80 font-inter">
-                {isGuest ? 'Joueur Invité' : 'Maître du Bluff'} • Niveau {userLevel}
+                Maître du Bluff • Niveau {userLevel}
               </p>
             </div>
           </div>
@@ -230,23 +229,6 @@ const Dashboard = () => {
             </p>
           </div>
         </GlassCard>
-
-        {/* Guest Warning */}
-        {isGuest && (
-          <GlassCard className="mt-4 bg-yellow-500/20 border-yellow-300/30">
-            <div className="text-center">
-              <p className="text-yellow-100 text-sm font-inter mb-2">
-                🔒 Mode invité : tes stats ne sont pas sauvegardées
-              </p>
-              <Button
-                onClick={() => navigate('/auth')}
-                className="bg-white/20 border-white/50 text-white hover:bg-white/30 text-xs px-4 py-1"
-              >
-                Créer un compte
-              </Button>
-            </div>
-          </GlassCard>
-        )}
       </div>
     </AnimatedBackground>
   );

@@ -1,118 +1,135 @@
 
-import { useEffect } from 'react';
-import { useAuthStore } from '@/stores/authStore';
-import { useUIStore } from '@/stores/uiStore';
+import { useState, useEffect, useCallback } from 'react';
+import { User, Session } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
+import { useToast } from '@/hooks/use-toast';
 
 export const useAuth = () => {
-  const authStore = useAuthStore();
-  const { addToast } = useUIStore();
+  const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [initialized, setInitialized] = useState(false);
+  const { toast } = useToast();
 
-  // Initialize auth state on mount
   useEffect(() => {
+    // Prevent multiple initializations
+    if (initialized) return;
+
+    console.log('useAuth: Initializing...');
+    setInitialized(true);
+
+    // Get initial session
     const initializeAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (session?.user) {
-        authStore.setUser(session.user);
+      try {
+        const { data: { session: initialSession } } = await supabase.auth.getSession();
+        console.log('useAuth: Initial session:', !!initialSession);
         
-        // Fetch profile
-        const { data: profile } = await supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', session.user.id)
-          .single();
-          
-        if (profile) {
-          authStore.setProfile(profile);
-        }
+        setSession(initialSession);
+        setUser(initialSession?.user ?? null);
+      } catch (error) {
+        console.error('useAuth: Error getting initial session:', error);
+      } finally {
+        setLoading(false);
       }
-      
-      authStore.setInitialized(true);
     };
 
-    initializeAuth();
-
-    // Listen for auth changes
+    // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (event === 'SIGNED_IN' && session?.user) {
-          authStore.setUser(session.user);
-          
-          // Fetch profile
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', session.user.id)
-            .single();
-            
-          if (profile) {
-            authStore.setProfile(profile);
-          }
-        } else if (event === 'SIGNED_OUT') {
-          authStore.setUser(null);
-          authStore.setProfile(null);
+      (event, newSession) => {
+        console.log('useAuth: Auth state changed:', event, !!newSession);
+        
+        setSession(newSession);
+        setUser(newSession?.user ?? null);
+        
+        if (event === 'SIGNED_IN') {
+          toast({
+            title: "Connexion réussie ! 🎉",
+            description: "Bienvenue sur KIADISA !",
+          });
         }
+        
+        if (event === 'SIGNED_OUT') {
+          toast({
+            title: "Déconnexion réussie",
+            description: "À bientôt sur KIADISA !",
+          });
+        }
+        
+        // Mark as not loading after first auth event
+        setLoading(false);
       }
     );
 
-    return () => subscription.unsubscribe();
+    // Initialize auth
+    initializeAuth();
+
+    return () => {
+      console.log('useAuth: Cleaning up subscription');
+      subscription.unsubscribe();
+    };
+  }, [initialized, toast]);
+
+  const signIn = useCallback(async (email: string, password: string) => {
+    try {
+      setLoading(true);
+      const { error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+
+      if (error) throw error;
+
+      return { success: true };
+    } catch (error: any) {
+      console.error('Sign in error:', error);
+      return { success: false, error: error.message };
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
-  const signIn = async (email: string, password: string) => {
-    const result = await authStore.signIn(email, password);
-    
-    if (result.success) {
-      addToast({
-        title: "Connexion réussie ! 🎉",
-        description: "Bon retour parmi nous !",
+  const signUp = useCallback(async (email: string, password: string, metadata?: any) => {
+    try {
+      setLoading(true);
+      const { error } = await supabase.auth.signUp({
+        email,
+        password,
+        options: {
+          emailRedirectTo: `${window.location.origin}/dashboard`,
+          data: metadata
+        }
       });
-    } else {
-      addToast({
-        title: "Erreur de connexion",
-        description: result.error || "Identifiants incorrects",
-        variant: "destructive"
-      });
-    }
-    
-    return result;
-  };
 
-  const signUp = async (email: string, password: string, pseudo: string, avatar: string) => {
-    const result = await authStore.signUp(email, password, pseudo, avatar);
-    
-    if (result.success) {
-      addToast({
-        title: "Compte créé ! 🎊",
-        description: "Vérifiez votre email pour confirmer votre compte",
-      });
-    } else {
-      addToast({
-        title: "Erreur d'inscription",
-        description: result.error || "Impossible de créer le compte",
-        variant: "destructive"
-      });
-    }
-    
-    return result;
-  };
+      if (error) throw error;
 
-  const signOut = async () => {
-    await authStore.signOut();
-    addToast({
-      title: "Déconnexion réussie",
-      description: "À bientôt !",
-    });
-  };
+      return { success: true };
+    } catch (error: any) {
+      console.error('Sign up error:', error);
+      return { success: false, error: error.message };
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  const signOut = useCallback(async () => {
+    try {
+      setLoading(true);
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
+
+      return { success: true };
+    } catch (error: any) {
+      console.error('Sign out error:', error);
+      return { success: false, error: error.message };
+    } finally {
+      setLoading(false);
+    }
+  }, []);
 
   return {
-    // State
-    user: authStore.user,
-    profile: authStore.profile,
-    loading: authStore.loading,
-    initialized: authStore.initialized,
-    
-    // Actions
+    user,
+    session,
+    loading,
     signIn,
     signUp,
     signOut,
