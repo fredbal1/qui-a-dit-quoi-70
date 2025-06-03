@@ -245,7 +245,7 @@ export const useGameActions = () => {
           context: { gameId },
           timestamp: new Date().toISOString()
         });
-        return result;
+        return { success: false, error: result.error };
       }
     } catch (err: any) {
       logError({
@@ -363,7 +363,7 @@ export const useGameActions = () => {
           context: { settings },
           timestamp: new Date().toISOString()
         });
-        return result;
+        return { success: false, error: result.error };
       }
     } catch (err: any) {
       logError({

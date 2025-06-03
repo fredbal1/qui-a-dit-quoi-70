@@ -1,5 +1,4 @@
 
-
 import { renderHook } from '@testing-library/react';
 import { waitFor } from '@testing-library/dom';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -94,4 +93,3 @@ describe('useGameActions', () => {
     expect(response.gameCode).toBeTruthy();
   });
 });
-
